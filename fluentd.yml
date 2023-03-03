@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fluentd
+  namespace: default
+  labels:
+    app: fluentd
+spec:
+  selector:
+    matchLabels:
+      app: fluentd
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: fluentd
+    spec:
+      containers:
+      - name: fluentd
+        image: roblesjm/fluentd-elastic:v1.15-debian-1
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 1024m
+            memory: 1024Mi
+        env:
+          - name: FLUENTD_SYSTEMD_CONF
+            value: disable
+        ports:
+        - containerPort: 24224
+          name: fluentd
+        - containerPort: 24224
+          protocol: UDP
+          name: fluentd-upd
+        - containerPort: 9880
+          name: fluentd-http
+
+        volumeMounts:
+          - name: fluent-config
+            mountPath: /fluentd/etc
+      volumes:
+        - name: fluent-config
+          configMap:
+            name: fluent-config
+            items:
+              - key: fluent.conf
+                path: fluent.conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fluentd-svc
+  namespace: default
+spec:
+  selector:
+    app: fluentd
+  type: ClusterIP
+  ports:
+  - name: fluentd
+    protocol: TCP
+    port: 24224
+  - name: fluentd-http
+    protocol: TCP
+    port: 9880
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fluentd-ingress
+  namespace: default
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: fluentd-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required'
+spec:
+  tls:
+    - hosts:
+      - fluentd.example.com
+      secretName: fluentd-tls
+  rules:
+  - host: fluentd.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: fluentd-svc
+            port:
+              number: 9880

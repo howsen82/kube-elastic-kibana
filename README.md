@@ -11,4 +11,5 @@ $ kubectl apply -f kibana.yml
 **Fluentd**
 ```
 $ kubectl create configmap --from-file=fluent.conf=fluent.conf fluent-config
+$ kubectl apply -f fluentd.yaml
 ```
